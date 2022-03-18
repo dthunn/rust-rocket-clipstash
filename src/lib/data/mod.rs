@@ -1,7 +1,51 @@
+pub mod model;
+pub mod query;
+
 use derive_more::{Display, From};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use sqlx::Sqlite;
 use std::str::FromStr;
+
+#[derive(Debug, thiserror::Error)]
+pub enum DataError {
+    #[error("Database error: {0}")]
+    Database(#[from] sqlx::Error)
+}
+
+pub struct Database<D: sqlx::Database>(sqlx::Pool<D>);
+
+impl Database<Sqlite> {
+    /// Create a new `Database` with the provided `connection_string`.
+    pub async fn new(connection_str: &str) -> Self {
+        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .connect(connection_str)
+            .await;
+        match pool {
+            Ok(pool) => Self(pool),
+            Err(e) => {
+                eprintln!("{}\n", e);
+                eprintln!("If the database has not yet been created, run: \n   $ sqlx database setup\n");
+                panic!("database connection error");
+            }
+        }
+    }
+    /// Get a reference to the database connection pool.
+    pub fn get_pool(&self) -> &DatabasePool {
+        &self.0
+    }
+}
+
+/// Concrete database pool wrapper.
+pub type AppDatabase = Database<Sqlite>;
+/// Concrete database pool.
+pub type DatabasePool = sqlx::sqlite::SqlitePool;
+/// Concrete database transaction.
+pub type Transaction<'t> = sqlx::Transaction<'t, Sqlite>;
+/// Concrete database row.
+pub type AppDatabaseRow = sqlx::sqlite::SqliteRow;
+/// Concrete database query result.
+pub type AppQueryResult = sqlx::sqlite::SqliteQueryResult;
 
 #[derive(Clone, Debug, From, Display, Deserialize, Serialize)]
 pub struct DbId(Uuid);
